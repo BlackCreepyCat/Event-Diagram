@@ -37,9 +37,10 @@
         }
 
         #canvas {
-            width: 100%;
-            height: 100%;
             display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
 
         .header {
@@ -291,7 +292,9 @@
             animationTime: 0,
             backgroundColor: '#000000', // Pure black
             TITLE_BAR_HEIGHT: 30,
-            ANCHOR_SIZE: 8
+            ANCHOR_SIZE: 8,
+            canvasWidth: 0,
+            canvasHeight: 0
         };
 
         // Canvas setup
@@ -300,10 +303,22 @@
         let animationId;
 
         function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            render();
+            // Update canvas internal dimensions
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // CRITICAL: Also set CSS dimensions to match internal dimensions
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            
+            // Store in state for consistent access
+            state.canvasWidth = width;
+            state.canvasHeight = height;
         }
+        
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
@@ -523,15 +538,8 @@
 
         // Rendering
         function drawGrid() {
-            // Adaptive grid size based on zoom - larger spacing when zoomed out
-            let gridSize = 40;
-            if (state.camera.zoom < 0.5) {
-                gridSize = 80;
-            } else if (state.camera.zoom < 0.25) {
-                gridSize = 160;
-            } else if (state.camera.zoom > 2) {
-                gridSize = 20;
-            }
+            // Fixed grid spacing in screen pixels
+            const gridSize = 40;
             
             ctx.save();
             ctx.globalAlpha = 0.15;
@@ -543,28 +551,15 @@
                 ctx.fillStyle = '#888888'; // Light grid on dark background
             }
             
-            const startX = Math.floor(-state.camera.x / state.camera.zoom / gridSize) * gridSize;
-            const startY = Math.floor(-state.camera.y / state.camera.zoom / gridSize) * gridSize;
-            const endX = startX + canvas.width / state.camera.zoom + gridSize * 2;
-            const endY = startY + canvas.height / state.camera.zoom + gridSize * 2;
-
-            // Limit number of dots to prevent performance issues
-            const maxDots = 2000;
-            let dotsDrawn = 0;
-
-            for (let x = startX; x < endX && dotsDrawn < maxDots; x += gridSize) {
-                for (let y = startY; y < endY && dotsDrawn < maxDots; y += gridSize) {
-                    const screen = worldToScreen(x, y);
-                    // Only draw if on screen
-                    if (screen.x >= -20 && screen.x <= canvas.width + 20 &&
-                        screen.y >= -20 && screen.y <= canvas.height + 20) {
-                        ctx.beginPath();
-                        ctx.arc(screen.x, screen.y, 1.5, 0, Math.PI * 2);
-                        ctx.fill();
-                        dotsDrawn++;
-                    }
+            // Draw fixed grid in screen coordinates
+            for (let x = 0; x <= state.canvasWidth; x += gridSize) {
+                for (let y = 0; y <= state.canvasHeight; y += gridSize) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+                    ctx.fill();
                 }
             }
+            
             ctx.restore();
         }
 
@@ -909,11 +904,11 @@
                 if (Math.abs(state.camera.vy) < 0.5) state.camera.vy = 0;
             }
             
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
             
             // Fill background with selected color
             ctx.fillStyle = state.backgroundColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, state.canvasWidth, state.canvasHeight);
             
             // Update app background
             document.getElementById('app').style.background = state.backgroundColor;
