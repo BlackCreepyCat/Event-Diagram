@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Mapper - Cartographie d'Événements</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #000000;
+            --bg-panel: #2a2a2a;
+            --gray-light: #cccccc;
+            --gray-medium: #888888;
+            --gray-dark: #444444;
+            --orange: #ff8c42;
+            --orange-bright: #ffa366;
+            --orange-dark: #e67a35;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: var(--bg-dark);
+            color: var(--gray-light);
+            overflow: hidden;
+            cursor: default;
+        }
+
+        #app {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px var(--orange), 0 0 40px var(--orange);
+            color: var(--orange);
+        }
+
+        .toolbar {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(42, 42, 42, 0.95);
+            border: 2px solid var(--orange);
+            border-radius: 8px;
+            padding: 10px 15px;
+            display: flex;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(255, 140, 66, 0.3);
+            z-index: 100;
+        }
+
+        .btn {
+            background: rgba(255, 140, 66, 0.1);
+            border: 1px solid var(--orange);
+            color: var(--orange);
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Arial', sans-serif;
+            font-size: 11px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 140, 66, 0.3);
+            box-shadow: 0 0 15px rgba(255, 140, 66, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .btn.active {
+            background: rgba(255, 140, 66, 0.4);
+            box-shadow: 0 0 20px rgba(255, 140, 66, 0.6);
+        }
+
+        .btn.delete {
+            border-color: #ff4444;
+            color: #ff4444;
+        }
+
+        .btn.delete:hover {
+            background: rgba(255, 68, 68, 0.3);
+            box-shadow: 0 0 15px rgba(255, 68, 68, 0.5);
+        }
+
+        .divider {
+            width: 1px;
+            background: rgba(255, 140, 66, 0.3);
+            margin: 0 5px;
+        }
+
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(42, 42, 42, 0.95);
+            border: 1px solid rgba(255, 140, 66, 0.4);
+            border-radius: 6px;
+            padding: 15px;
+            font-size: 10px;
+            line-height: 1.6;
+            backdrop-filter: blur(10px);
+            color: var(--gray-light);
+            z-index: 100;
+            max-width: 320px;
+        }
+
+        .info-panel div {
+            margin: 3px 0;
+        }
+
+        .stats {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(42, 42, 42, 0.95);
+            border: 1px solid rgba(255, 140, 66, 0.4);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 11px;
+            backdrop-filter: blur(10px);
+            color: var(--gray-light);
+            z-index: 100;
+        }
+
+        .stats-value {
+            color: var(--orange);
+            font-weight: bold;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        #nodeEditInput {
+            position: absolute;
+            background: rgba(42, 42, 42, 0.98);
+            border: 2px solid var(--orange);
+            color: var(--gray-light);
+            padding: 8px 12px;
+            font-family: 'Arial', sans-serif;
+            font-size: 12px;
+            border-radius: 4px;
+            outline: none;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 0 20px rgba(255, 140, 66, 0.5);
+            resize: none;
+            line-height: 1.4;
+        }
+
+        .cursor-pan { cursor: grab; }
+        .cursor-panning { cursor: grabbing; }
+        .cursor-link { cursor: crosshair; }
+        .cursor-resize-nw { cursor: nw-resize; }
+        .cursor-resize-ne { cursor: ne-resize; }
+        .cursor-resize-sw { cursor: sw-resize; }
+        .cursor-resize-se { cursor: se-resize; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">⚡ EVENT MAPPER</div>
+        
+        <div class="toolbar">
+            <button class="btn active" id="btnSelect">🖱️ Sélect</button>
+            <button class="btn" id="btnPan">✋ Vue</button>
+            <div class="divider"></div>
+            <button class="btn" id="btnZoomIn">🔍+</button>
+            <button class="btn" id="btnZoomOut">🔍-</button>
+            <div class="divider"></div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <span style="font-size: 10px; color: var(--gray-medium);">FOND:</span>
+                <button class="btn" id="btnBgDark" style="background: #000000; min-width: 30px; padding: 8px;">⬛</button>
+                <button class="btn" id="btnBgGray" style="background: #444444; min-width: 30px; padding: 8px;">◼️</button>
+                <button class="btn" id="btnBgWhite" style="background: #f0f0f0; color: #1a1a1a; min-width: 30px; padding: 8px;">⬜</button>
+            </div>
+            <div class="divider"></div>
+            <button class="btn" id="btnReverseSpline" style="display: none; border-color: var(--orange); color: var(--orange);">🔄 Inverser</button>
+            <div class="divider" id="dividerReverse" style="display: none;"></div>
+            <button class="btn" id="btnExport">💾 Export</button>
+            <button class="btn" id="btnImport">📂 Import</button>
+            <button class="btn delete" id="btnClear">🗑️ Clear</button>
+        </div>
+
+        <canvas id="canvas"></canvas>
+        <input type="file" id="fileInput" accept=".json">
+        <textarea id="nodeEditInput" rows="3"></textarea>
+        
+        <div id="colorPicker" style="display: none; position: absolute; background: rgba(42, 42, 42, 0.95); border: 2px solid #ff8c42; border-radius: 8px; padding: 12px; z-index: 1000; backdrop-filter: blur(10px);">
+            <div style="color: #cccccc; font-size: 11px; margin-bottom: 8px; font-weight: bold;">COULEUR NODE</div>
+            <div style="display: grid; grid-template-columns: repeat(6, 30px); gap: 6px;">
+                <div class="color-btn" data-color="#ff8c42" style="width: 30px; height: 30px; background: #ff8c42; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#ffa366" style="width: 30px; height: 30px; background: #ffa366; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#e67a35" style="width: 30px; height: 30px; background: #e67a35; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#ff6b6b" style="width: 30px; height: 30px; background: #ff6b6b; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#ee5a6f" style="width: 30px; height: 30px; background: #ee5a6f; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#c44569" style="width: 30px; height: 30px; background: #c44569; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#f8b500" style="width: 30px; height: 30px; background: #f8b500; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#feca57" style="width: 30px; height: 30px; background: #feca57; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#48dbfb" style="width: 30px; height: 30px; background: #48dbfb; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#0abde3" style="width: 30px; height: 30px; background: #0abde3; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#00d2d3" style="width: 30px; height: 30px; background: #00d2d3; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#1dd1a1" style="width: 30px; height: 30px; background: #1dd1a1; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#10ac84" style="width: 30px; height: 30px; background: #10ac84; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#5f27cd" style="width: 30px; height: 30px; background: #5f27cd; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#341f97" style="width: 30px; height: 30px; background: #341f97; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#ff9ff3" style="width: 30px; height: 30px; background: #ff9ff3; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#54a0ff" style="width: 30px; height: 30px; background: #54a0ff; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+                <div class="color-btn" data-color="#2e86de" style="width: 30px; height: 30px; background: #2e86de; border: 2px solid #fff; border-radius: 4px; cursor: pointer;"></div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <div>⚡ <strong>DOUBLE-CLIC</strong> espace → créer node</div>
+            <div>✏️ <strong>DOUBLE-CLIC</strong> titre → éditer titre</div>
+            <div>📝 <strong>DOUBLE-CLIC</strong> corps → éditer contenu</div>
+            <div>🎨 <strong>CLIC</strong> node + palette → coloriser</div>
+            <div>🔗 <strong>DRAG</strong> ancre → ancre → créer lien</div>
+            <div>🎯 <strong>CLIC</strong> spline → sélectionner</div>
+            <div>🔄 <strong>CLIC</strong> inverser → changer sens anim</div>
+            <div>🌐 <strong>CTRL+CLIC</strong> → ouvrir URL</div>
+            <div>📐 <strong>DRAG</strong> coins → resize node</div>
+            <div>🖱️ <strong>DRAG</strong> barre titre → déplacer</div>
+            <div>🔍 <strong>MOLETTE</strong> → zoom (grille adaptative)</div>
+            <div>⬛ <strong>FOND</strong> → noir / gris / blanc</div>
+            <div>🗑️ <strong>SUPPR</strong> → supprimer sélection</div>
+        </div>
+
+        <div class="stats">
+            <div>NODES: <span class="stats-value" id="nodeCount">3</span></div>
+            <div>LINKS: <span class="stats-value" id="linkCount">2</span></div>
+            <div>ZOOM: <span class="stats-value" id="zoomLevel">100%</span></div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        const state = {
+            nodes: [
+                { id: 1, x: 400, y: 300, label: 'Événement A', color: '#ff8c42', width: 200, height: 120, vx: 0, vy: 0 },
+                { id: 2, x: 650, y: 200, label: 'Événement B\nhttps://example.com', color: '#ffa366', width: 200, height: 120, vx: 0, vy: 0 },
+                { id: 3, x: 700, y: 450, label: 'Événement C', color: '#ff8c42', width: 200, height: 120, vx: 0, vy: 0 }
+            ],
+            connections: [
+                { id: 1, from: 1, to: 2, fromAnchor: 'right', toAnchor: 'left' },
+                { id: 2, from: 2, to: 3, fromAnchor: 'bottom', toAnchor: 'top' }
+            ],
+            nextNodeId: 4,
+            nextConnId: 3,
+            mode: 'select',
+            selectedNode: null,
+            selectedConnection: null,
+            draggingSpline: false,
+            splineFromNode: null,
+            splineFromAnchor: null,
+            splineToPos: null,
+            draggingNode: null,
+            dragOffset: null,
+            resizingNode: null,
+            resizeCorner: null,
+            resizeStart: null,
+            resizeInitialBounds: null,
+            camera: { x: 0, y: 0, zoom: 1, vx: 0, vy: 0 },
+            isPanning: false,
+            panStart: { x: 0, y: 0 },
+            colors: ['#ff8c42', '#ffa366', '#e67a35', '#ff6b6b', '#ee5a6f', '#c44569', '#f8b500', '#feca57', '#48dbfb', '#0abde3', '#00d2d3', '#1dd1a1', '#10ac84', '#5f27cd', '#341f97', '#ff9ff3', '#54a0ff', '#2e86de'],
+            lastTime: performance.now(),
+            animationTime: 0,
+            backgroundColor: '#000000', // Pure black
+            TITLE_BAR_HEIGHT: 30,
+            ANCHOR_SIZE: 8
+        };
+
+        // Canvas setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let animationId;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            render();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Utilities
+        function screenToWorld(x, y) {
+            return {
+                x: (x - state.camera.x) / state.camera.zoom,
+                y: (y - state.camera.y) / state.camera.zoom
+            };
+        }
+
+        function worldToScreen(x, y) {
+            return {
+                x: x * state.camera.zoom + state.camera.x,
+                y: y * state.camera.zoom + state.camera.y
+            };
+        }
+
+        function getNodeAt(x, y) {
+            const world = screenToWorld(x, y);
+            for (let i = state.nodes.length - 1; i >= 0; i--) {
+                const node = state.nodes[i];
+                const halfW = node.width / 2;
+                const halfH = node.height / 2;
+                
+                if (world.x >= node.x - halfW && world.x <= node.x + halfW &&
+                    world.y >= node.y - halfH && world.y <= node.y + halfH) {
+                    return node;
+                }
+            }
+            return null;
+        }
+
+        function getNodeTitleBarAt(x, y) {
+            const world = screenToWorld(x, y);
+            for (let i = state.nodes.length - 1; i >= 0; i--) {
+                const node = state.nodes[i];
+                const halfW = node.width / 2;
+                const halfH = node.height / 2;
+                
+                if (world.x >= node.x - halfW && world.x <= node.x + halfW &&
+                    world.y >= node.y - halfH && world.y <= node.y - halfH + state.TITLE_BAR_HEIGHT) {
+                    return node;
+                }
+            }
+            return null;
+        }
+
+        function getNodeBodyAt(x, y) {
+            const world = screenToWorld(x, y);
+            for (let i = state.nodes.length - 1; i >= 0; i--) {
+                const node = state.nodes[i];
+                const halfW = node.width / 2;
+                const halfH = node.height / 2;
+                
+                // Check if in body (below title bar)
+                if (world.x >= node.x - halfW && world.x <= node.x + halfW &&
+                    world.y >= node.y - halfH + state.TITLE_BAR_HEIGHT && world.y <= node.y + halfH) {
+                    return node;
+                }
+            }
+            return null;
+        }
+
+        function getResizeCorner(x, y) {
+            const world = screenToWorld(x, y);
+            const cornerSize = 15;
+            
+            for (let i = state.nodes.length - 1; i >= 0; i--) {
+                const node = state.nodes[i];
+                const halfW = node.width / 2;
+                const halfH = node.height / 2;
+                
+                // Check corners
+                const corners = {
+                    'nw': { x: node.x - halfW, y: node.y - halfH },
+                    'ne': { x: node.x + halfW, y: node.y - halfH },
+                    'sw': { x: node.x - halfW, y: node.y + halfH },
+                    'se': { x: node.x + halfW, y: node.y + halfH }
+                };
+                
+                for (const [corner, pos] of Object.entries(corners)) {
+                    if (Math.abs(world.x - pos.x) < cornerSize && 
+                        Math.abs(world.y - pos.y) < cornerSize) {
+                        return { node, corner };
+                    }
+                }
+            }
+            return null;
+        }
+
+        function getAnchorAt(x, y) {
+            const world = screenToWorld(x, y);
+            const anchorSize = state.ANCHOR_SIZE * 2;
+            
+            for (const node of state.nodes) {
+                const anchors = getNodeAnchors(node);
+                for (const [name, pos] of Object.entries(anchors)) {
+                    if (Math.abs(world.x - pos.x) < anchorSize && 
+                        Math.abs(world.y - pos.y) < anchorSize) {
+                        return { node, anchor: name };
+                    }
+                }
+            }
+            return null;
+        }
+
+        function getNodeAnchors(node) {
+            const halfW = node.width / 2;
+            const halfH = node.height / 2;
+            return {
+                top: { x: node.x, y: node.y - halfH },
+                bottom: { x: node.x, y: node.y + halfH },
+                left: { x: node.x - halfW, y: node.y },
+                right: { x: node.x + halfW, y: node.y }
+            };
+        }
+
+        function getConnectionAt(x, y) {
+            const world = screenToWorld(x, y);
+            const threshold = 15 / state.camera.zoom; // Adjust threshold for zoom
+            
+            for (const conn of state.connections) {
+                const fromNode = state.nodes.find(n => n.id === conn.from);
+                const toNode = state.nodes.find(n => n.id === conn.to);
+                if (!fromNode || !toNode) continue;
+
+                const fromAnchors = getNodeAnchors(fromNode);
+                const toAnchors = getNodeAnchors(toNode);
+                const fromPos = fromAnchors[conn.fromAnchor];
+                const toPos = toAnchors[conn.toAnchor];
+
+                // Get control points based on anchor directions
+                const dx = toPos.x - fromPos.x;
+                const dy = toPos.y - fromPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const controlDist = Math.min(dist * 0.4, 150);
+                
+                const getOffset = (anchor) => {
+                    switch(anchor) {
+                        case 'top': return { x: 0, y: -controlDist };
+                        case 'bottom': return { x: 0, y: controlDist };
+                        case 'left': return { x: -controlDist, y: 0 };
+                        case 'right': return { x: controlDist, y: 0 };
+                        default: return { x: 0, y: 0 };
+                    }
+                };
+                
+                const fromOffset = getOffset(conn.fromAnchor);
+                const toOffset = getOffset(conn.toAnchor);
+                
+                const cp1 = { x: fromPos.x + fromOffset.x, y: fromPos.y + fromOffset.y };
+                const cp2 = { x: toPos.x + toOffset.x, y: toPos.y + toOffset.y };
+
+                // Sample points along the Bezier curve and check distance
+                const samples = 20; // Number of sample points
+                for (let i = 0; i <= samples; i++) {
+                    const t = i / samples;
+                    const point = getBezierPoint(fromPos, cp1, cp2, toPos, t);
+                    
+                    const distX = world.x - point.x;
+                    const distY = world.y - point.y;
+                    const distSq = distX * distX + distY * distY;
+                    
+                    if (distSq <= threshold * threshold) {
+                        return conn;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function isURL(text) {
+            return /^https?:\/\//i.test(text);
+        }
+
+        // Calculate point on cubic Bezier curve at parameter t (0 to 1)
+        function getBezierPoint(p0, p1, p2, p3, t) {
+            const t2 = t * t;
+            const t3 = t2 * t;
+            const mt = 1 - t;
+            const mt2 = mt * mt;
+            const mt3 = mt2 * mt;
+            
+            return {
+                x: p0.x * mt3 + 3 * p1.x * mt2 * t + 3 * p2.x * mt * t2 + p3.x * t3,
+                y: p0.y * mt3 + 3 * p1.y * mt2 * t + 3 * p2.y * mt * t2 + p3.y * t3
+            };
+        }
+
+        // Get control points for Bezier curve based on anchor directions
+        function getControlPoints(from, to, fromAnchor, toAnchor) {
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const controlDist = Math.min(dist * 0.4, 150);
+            
+            // Calculate control point offset based on anchor direction
+            const getOffset = (anchor) => {
+                switch(anchor) {
+                    case 'top': return { x: 0, y: -controlDist };
+                    case 'bottom': return { x: 0, y: controlDist };
+                    case 'left': return { x: -controlDist, y: 0 };
+                    case 'right': return { x: controlDist, y: 0 };
+                    default: return { x: 0, y: 0 };
+                }
+            };
+            
+            const fromOffset = getOffset(fromAnchor);
+            const toOffset = getOffset(toAnchor);
+            
+            return {
+                cp1: { x: from.x + fromOffset.x, y: from.y + fromOffset.y },
+                cp2: { x: to.x + toOffset.x, y: to.y + toOffset.y }
+            };
+        }
+
+        // Rendering
+        function drawGrid() {
+            // Adaptive grid size based on zoom - larger spacing when zoomed out
+            let gridSize = 40;
+            if (state.camera.zoom < 0.5) {
+                gridSize = 80;
+            } else if (state.camera.zoom < 0.25) {
+                gridSize = 160;
+            } else if (state.camera.zoom > 2) {
+                gridSize = 20;
+            }
+            
+            ctx.save();
+            ctx.globalAlpha = 0.15;
+            
+            // Adapt grid color based on background
+            if (state.backgroundColor === '#f0f0f0' || state.backgroundColor === '#ffffff') {
+                ctx.fillStyle = '#333333'; // Dark grid on light background
+            } else {
+                ctx.fillStyle = '#888888'; // Light grid on dark background
+            }
+            
+            const startX = Math.floor(-state.camera.x / state.camera.zoom / gridSize) * gridSize;
+            const startY = Math.floor(-state.camera.y / state.camera.zoom / gridSize) * gridSize;
+            const endX = startX + canvas.width / state.camera.zoom + gridSize * 2;
+            const endY = startY + canvas.height / state.camera.zoom + gridSize * 2;
+
+            // Limit number of dots to prevent performance issues
+            const maxDots = 2000;
+            let dotsDrawn = 0;
+
+            for (let x = startX; x < endX && dotsDrawn < maxDots; x += gridSize) {
+                for (let y = startY; y < endY && dotsDrawn < maxDots; y += gridSize) {
+                    const screen = worldToScreen(x, y);
+                    // Only draw if on screen
+                    if (screen.x >= -20 && screen.x <= canvas.width + 20 &&
+                        screen.y >= -20 && screen.y <= canvas.height + 20) {
+                        ctx.beginPath();
+                        ctx.arc(screen.x, screen.y, 1.5, 0, Math.PI * 2);
+                        ctx.fill();
+                        dotsDrawn++;
+                    }
+                }
+            }
+            ctx.restore();
+        }
+
+        function drawConnection(conn) {
+            const fromNode = state.nodes.find(n => n.id === conn.from);
+            const toNode = state.nodes.find(n => n.id === conn.to);
+            if (!fromNode || !toNode) return;
+
+            const fromAnchors = getNodeAnchors(fromNode);
+            const toAnchors = getNodeAnchors(toNode);
+            const fromPos = fromAnchors[conn.fromAnchor];
+            const toPos = toAnchors[conn.toAnchor];
+
+            const from = worldToScreen(fromPos.x, fromPos.y);
+            const to = worldToScreen(toPos.x, toPos.y);
+            
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const curveStrength = Math.min(dist * 0.4, 150);
+
+            // Calculate control points based on anchor direction
+            const getControlPoint = (pos, anchor, strength) => {
+                switch(anchor) {
+                    case 'top':
+                        return { x: pos.x, y: pos.y - strength };
+                    case 'bottom':
+                        return { x: pos.x, y: pos.y + strength };
+                    case 'left':
+                        return { x: pos.x - strength, y: pos.y };
+                    case 'right':
+                        return { x: pos.x + strength, y: pos.y };
+                    default:
+                        return pos;
+                }
+            };
+
+            const cp1 = getControlPoint(from, conn.fromAnchor, curveStrength);
+            const cp2 = getControlPoint(to, conn.toAnchor, curveStrength);
+
+            // Base line
+            ctx.save();
+            
+            // Highlight if selected
+            const isSelected = state.selectedConnection === conn.id;
+            ctx.strokeStyle = isSelected ? '#ffa366' : '#666666';
+            ctx.lineWidth = isSelected ? 3.5 : 2.5;
+            ctx.shadowBlur = isSelected ? 15 : 8;
+            ctx.shadowColor = isSelected ? '#ffa366' : '#666666';
+            
+            ctx.beginPath();
+            ctx.moveTo(from.x, from.y);
+            ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, to.x, to.y);
+            ctx.stroke();
+            ctx.restore();
+
+            // Animated dashed line overlay
+            ctx.save();
+            ctx.strokeStyle = '#ff8c42';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.6;
+            ctx.setLineDash([8, 8]);
+            ctx.lineDashOffset = -state.animationTime * 20;
+            
+            ctx.beginPath();
+            ctx.moveTo(from.x, from.y);
+            ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, to.x, to.y);
+            ctx.stroke();
+            ctx.restore();
+
+            // Animated particles
+            const numParticles = 3;
+            const speed = 0.3;
+            
+            for (let i = 0; i < numParticles; i++) {
+                const offset = i / numParticles;
+                let t = ((state.animationTime * speed + offset) % 1);
+                
+                const point = getBezierPoint(from, cp1, cp2, to, t);
+                
+                // Draw glowing particle
+                ctx.save();
+                
+                // Outer glow
+                const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, 8);
+                gradient.addColorStop(0, 'rgba(255, 140, 66, 0.8)');
+                gradient.addColorStop(0.5, 'rgba(255, 163, 102, 0.4)');
+                gradient.addColorStop(1, 'rgba(255, 140, 66, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Inner bright core
+                ctx.fillStyle = '#ffa366';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ff8c42';
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        function drawNode(node) {
+            const screen = worldToScreen(node.x, node.y);
+            const width = node.width * state.camera.zoom;
+            const height = node.height * state.camera.zoom;
+            const titleBarHeight = state.TITLE_BAR_HEIGHT * state.camera.zoom;
+            const radius = 8 * state.camera.zoom;
+            
+            // Shadow
+            ctx.save();
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowOffsetY = 4;
+            
+            // Main body
+            const gradient = ctx.createLinearGradient(
+                screen.x - width/2, screen.y - height/2,
+                screen.x - width/2, screen.y + height/2
+            );
+            gradient.addColorStop(0, '#3a3a3a');
+            gradient.addColorStop(1, '#2a2a2a');
+            
+            ctx.fillStyle = gradient;
+            roundRect(ctx, screen.x - width/2, screen.y - height/2, width, height, radius);
+            ctx.fill();
+            
+            ctx.restore();
+
+            // Title bar
+            ctx.save();
+            ctx.fillStyle = node.color;
+            ctx.beginPath();
+            ctx.moveTo(screen.x - width/2 + radius, screen.y - height/2);
+            ctx.lineTo(screen.x + width/2 - radius, screen.y - height/2);
+            ctx.quadraticCurveTo(screen.x + width/2, screen.y - height/2, 
+                                screen.x + width/2, screen.y - height/2 + radius);
+            ctx.lineTo(screen.x + width/2, screen.y - height/2 + titleBarHeight);
+            ctx.lineTo(screen.x - width/2, screen.y - height/2 + titleBarHeight);
+            ctx.lineTo(screen.x - width/2, screen.y - height/2 + radius);
+            ctx.quadraticCurveTo(screen.x - width/2, screen.y - height/2,
+                                screen.x - width/2 + radius, screen.y - height/2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // Border
+            ctx.save();
+            ctx.strokeStyle = state.selectedNode === node.id ? '#ffa366' : node.color;
+            ctx.lineWidth = state.selectedNode === node.id ? 3 : 2;
+            ctx.globalAlpha = 0.8;
+            roundRect(ctx, screen.x - width/2, screen.y - height/2, width, height, radius);
+            ctx.stroke();
+            ctx.restore();
+
+            // Title text
+            ctx.save();
+            const titleFontSize = Math.max(16 * state.camera.zoom, 14);
+            ctx.font = `bold ${titleFontSize}px "Arial"`;
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 3;
+            ctx.shadowColor = '#000000';
+            
+            const titleLines = node.label.split('\n');
+            let firstLine = titleLines[0] || 'Node';
+            
+            // Truncate title if too long
+            const maxTitleWidth = width - 20;
+            let titleWidth = ctx.measureText(firstLine).width;
+            
+            if (titleWidth > maxTitleWidth) {
+                while (titleWidth > maxTitleWidth - 20 && firstLine.length > 0) {
+                    firstLine = firstLine.slice(0, -1);
+                    titleWidth = ctx.measureText(firstLine + '...').width;
+                }
+                firstLine += '...';
+            }
+            
+            ctx.fillText(firstLine, screen.x, screen.y - height/2 + titleBarHeight/2);
+            ctx.restore();
+
+            // Content text
+            ctx.save();
+            const fontSize = Math.max(16 * state.camera.zoom, 14);
+            ctx.font = `${fontSize}px "Arial"`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            
+            const contentLines = titleLines.slice(1);
+            const lineHeight = fontSize * 1.4;
+            const startY = screen.y - height/2 + titleBarHeight + 10;
+            const maxWidth = width - 20;
+            const maxHeight = height - titleBarHeight - 20;
+            
+            let currentY = startY;
+            contentLines.forEach((line, i) => {
+                // Check if we still have space
+                if (currentY - startY + lineHeight > maxHeight) return;
+                
+                const y = currentY;
+                
+                if (isURL(line)) {
+                    ctx.fillStyle = '#ff8c42';
+                    ctx.shadowBlur = 5;
+                    ctx.shadowColor = '#ff8c42';
+                } else {
+                    ctx.fillStyle = '#cccccc';
+                    ctx.shadowBlur = 2;
+                    ctx.shadowColor = '#000000';
+                }
+                
+                // Truncate text if too long
+                let displayText = line;
+                let textWidth = ctx.measureText(line).width;
+                
+                if (textWidth > maxWidth) {
+                    // Add ellipsis
+                    while (textWidth > maxWidth - 15 && displayText.length > 0) {
+                        displayText = displayText.slice(0, -1);
+                        textWidth = ctx.measureText(displayText + '...').width;
+                    }
+                    displayText += '...';
+                }
+                
+                ctx.fillText(displayText, screen.x - width/2 + 10, y);
+                currentY += lineHeight;
+            });
+            
+            ctx.restore();
+
+            // Resize corners
+            if (state.selectedNode === node.id) {
+                const cornerSize = 8 * state.camera.zoom;
+                ctx.save();
+                ctx.fillStyle = '#ff8c42';
+                ctx.globalAlpha = 0.7;
+                
+                // Four corners
+                const corners = [
+                    [screen.x - width/2, screen.y - height/2],
+                    [screen.x + width/2, screen.y - height/2],
+                    [screen.x - width/2, screen.y + height/2],
+                    [screen.x + width/2, screen.y + height/2]
+                ];
+                
+                corners.forEach(([x, y]) => {
+                    ctx.fillRect(x - cornerSize/2, y - cornerSize/2, cornerSize, cornerSize);
+                });
+                
+                ctx.restore();
+            }
+
+            // Anchors
+            drawAnchors(node);
+        }
+
+        function drawAnchors(node) {
+            const anchors = getNodeAnchors(node);
+            const anchorSize = state.ANCHOR_SIZE * state.camera.zoom;
+            
+            ctx.save();
+            
+            for (const [name, pos] of Object.entries(anchors)) {
+                const screen = worldToScreen(pos.x, pos.y);
+                
+                // Highlight if dragging from this anchor
+                const isDragging = state.draggingSpline && state.splineFromNode === node.id && state.splineFromAnchor === name;
+                
+                ctx.fillStyle = isDragging ? '#ffa366' : '#666666';
+                ctx.strokeStyle = '#ff8c42';
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.7;
+                
+                if (isDragging) {
+                    ctx.globalAlpha = 0.9;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ffa366';
+                }
+                
+                ctx.beginPath();
+                ctx.arc(screen.x, screen.y, anchorSize, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+        }
+
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+
+        function render() {
+            const currentTime = performance.now();
+            const deltaTime = Math.min((currentTime - state.lastTime) / 1000, 0.1);
+            state.lastTime = currentTime;
+            
+            // Update animation time for spline flow
+            state.animationTime += deltaTime;
+            
+            // Apply physics only to nodes not being dragged
+            state.nodes.forEach(node => {
+                if (state.draggingNode !== node.id && state.resizingNode !== node.id) {
+                    node.x += node.vx * deltaTime;
+                    node.y += node.vy * deltaTime;
+                    
+                    const damping = 0.92;
+                    node.vx *= Math.pow(damping, deltaTime * 60);
+                    node.vy *= Math.pow(damping, deltaTime * 60);
+                    
+                    if (Math.abs(node.vx) < 0.1) node.vx = 0;
+                    if (Math.abs(node.vy) < 0.1) node.vy = 0;
+                }
+            });
+
+            // Apply physics to camera
+            if (!state.isPanning) {
+                state.camera.x += state.camera.vx * deltaTime;
+                state.camera.y += state.camera.vy * deltaTime;
+                
+                const damping = 0.90;
+                state.camera.vx *= Math.pow(damping, deltaTime * 60);
+                state.camera.vy *= Math.pow(damping, deltaTime * 60);
+                
+                if (Math.abs(state.camera.vx) < 0.5) state.camera.vx = 0;
+                if (Math.abs(state.camera.vy) < 0.5) state.camera.vy = 0;
+            }
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Fill background with selected color
+            ctx.fillStyle = state.backgroundColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update app background
+            document.getElementById('app').style.background = state.backgroundColor;
+            
+            drawGrid();
+            state.connections.forEach(drawConnection);
+            
+            // Draw spline being dragged
+            if (state.draggingSpline && state.splineFromNode && state.splineToPos) {
+                const fromNode = state.nodes.find(n => n.id === state.splineFromNode);
+                if (fromNode) {
+                    const fromAnchors = getNodeAnchors(fromNode);
+                    const fromPos = fromAnchors[state.splineFromAnchor];
+                    const from = worldToScreen(fromPos.x, fromPos.y);
+                    const to = state.splineToPos;
+                    
+                    const dx = to.x - from.x;
+                    const dy = to.y - from.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const curve = Math.min(dist * 0.3, 100);
+
+                    ctx.save();
+                    ctx.strokeStyle = '#ffa366';
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([5, 5]);
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ffa366';
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(from.x, from.y);
+                    ctx.bezierCurveTo(
+                        from.x + curve, from.y,
+                        to.x - curve, to.y,
+                        to.x, to.y
+                    );
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+            
+            state.nodes.forEach(drawNode);
+            
+            document.getElementById('nodeCount').textContent = state.nodes.length;
+            document.getElementById('linkCount').textContent = state.connections.length;
+            document.getElementById('zoomLevel').textContent = Math.round(state.camera.zoom * 100) + '%';
+            
+            // Show/hide reverse button based on spline selection
+            const reverseBtn = document.getElementById('btnReverseSpline');
+            const reverseDivider = document.getElementById('dividerReverse');
+            if (state.selectedConnection) {
+                reverseBtn.style.display = 'block';
+                reverseDivider.style.display = 'block';
+            } else {
+                reverseBtn.style.display = 'none';
+                reverseDivider.style.display = 'none';
+            }
+            
+            // Update color picker position
+            const colorPicker = document.getElementById('colorPicker');
+            if (state.selectedNode) {
+                const node = state.nodes.find(n => n.id === state.selectedNode);
+                if (node) {
+                    const screen = worldToScreen(node.x, node.y);
+                    const halfW = node.width / 2 * state.camera.zoom;
+                    colorPicker.style.display = 'block';
+                    colorPicker.style.left = (screen.x + halfW + 10) + 'px';
+                    colorPicker.style.top = (screen.y - 30) + 'px';
+                } else {
+                    colorPicker.style.display = 'none';
+                }
+            } else {
+                colorPicker.style.display = 'none';
+            }
+            
+            animationId = requestAnimationFrame(render);
+        }
+
+        // Event handlers
+        canvas.addEventListener('dblclick', (e) => {
+            const world = screenToWorld(e.clientX, e.clientY);
+            const titleNode = getNodeTitleBarAt(e.clientX, e.clientY);
+            
+            if (titleNode) {
+                showNodeEditor(titleNode, 'title');
+                return;
+            }
+            
+            // Check if clicking on node body
+            const bodyNode = getNodeBodyAt(e.clientX, e.clientY);
+            if (bodyNode) {
+                showNodeEditor(bodyNode, 'body');
+                return;
+            }
+            
+            // Only create node if clicking on empty space
+            if (state.mode === 'select') {
+                const newNode = {
+                    id: state.nextNodeId++,
+                    x: world.x,
+                    y: world.y,
+                    label: `Événement ${state.nextNodeId - 1}`,
+                    color: state.colors[Math.floor(Math.random() * state.colors.length)],
+                    width: 200,
+                    height: 120,
+                    vx: 0,
+                    vy: 0
+                };
+                state.nodes.push(newNode);
+            }
+        });
+
+        canvas.addEventListener('click', (e) => {
+            // Priority 1: Check for connection click to select
+            const conn = getConnectionAt(e.clientX, e.clientY);
+            if (conn) {
+                state.selectedConnection = conn.id;
+                state.selectedNode = null;
+                return;
+            }
+            
+            // Priority 2: Check for URL click (Ctrl+Click on node)
+            const node = getNodeAt(e.clientX, e.clientY);
+            if (node && e.ctrlKey) {
+                const lines = node.label.split('\n');
+                for (const line of lines) {
+                    if (isURL(line)) {
+                        window.open(line, '_blank');
+                        return;
+                    }
+                }
+            }
+            
+            // Priority 3: Click on empty space - deselect all
+            if (!node && !conn) {
+                state.selectedNode = null;
+                state.selectedConnection = null;
+            }
+        });
+
+        let panLastPos = null;
+
+        canvas.addEventListener('mousedown', (e) => {
+            // Priority 1: Check for anchor drag (for creating connections)
+            const anchor = getAnchorAt(e.clientX, e.clientY);
+            if (anchor) {
+                state.draggingSpline = true;
+                state.splineFromNode = anchor.node.id;
+                state.splineFromAnchor = anchor.anchor;
+                state.splineToPos = { x: e.clientX, y: e.clientY };
+                return;
+            }
+
+            // Priority 2: Check for resize handle
+            const resizeHandle = getResizeCorner(e.clientX, e.clientY);
+            if (resizeHandle && state.mode === 'select') {
+                state.resizingNode = resizeHandle.node.id;
+                state.resizeCorner = resizeHandle.corner;
+                const node = resizeHandle.node;
+                
+                // Store initial bounds - we'll keep the opposite corner fixed
+                const halfW = node.width / 2;
+                const halfH = node.height / 2;
+                
+                state.resizeInitialBounds = {
+                    left: node.x - halfW,
+                    right: node.x + halfW,
+                    top: node.y - halfH,
+                    bottom: node.y + halfH
+                };
+                
+                const world = screenToWorld(e.clientX, e.clientY);
+                state.resizeStart = { x: world.x, y: world.y };
+                return;
+            }
+
+            // Priority 3: Check for node title bar drag
+            const titleNode = getNodeTitleBarAt(e.clientX, e.clientY);
+            if (state.mode === 'select' && titleNode) {
+                state.draggingNode = titleNode.id;
+                state.selectedNode = titleNode.id;
+                state.selectedConnection = null; // Deselect connection
+                titleNode.vx = 0;
+                titleNode.vy = 0;
+                const world = screenToWorld(e.clientX, e.clientY);
+                state.dragOffset = { x: world.x - titleNode.x, y: world.y - titleNode.y };
+                return;
+            }
+
+            // Priority 4: Check for connection click (don't pan if clicking on connection)
+            const conn = getConnectionAt(e.clientX, e.clientY);
+            if (conn) {
+                // Let the click event handle the selection
+                return;
+            }
+
+            // Priority 5: Pan camera (click on empty space)
+            if (!titleNode && !conn) {
+                state.isPanning = true;
+                state.panStart = { x: e.clientX - state.camera.x, y: e.clientY - state.camera.y };
+                panLastPos = { x: e.clientX, y: e.clientY, time: performance.now() };
+                canvas.classList.add('cursor-panning');
+                state.selectedNode = null;
+                state.selectedConnection = null; // Deselect connection
+                state.camera.vx = 0;
+                state.camera.vy = 0;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            // Update cursor based on mode and hover
+            const resizeHandle = getResizeCorner(e.clientX, e.clientY);
+            if (resizeHandle && state.mode === 'select' && !state.draggingSpline) {
+                canvas.className = `cursor-resize-${resizeHandle.corner}`;
+            } else if (state.isPanning) {
+                canvas.className = 'cursor-panning';
+            } else if (!getNodeAt(e.clientX, e.clientY)) {
+                canvas.className = 'cursor-pan';
+            } else {
+                canvas.className = '';
+            }
+
+            // Handle spline dragging
+            if (state.draggingSpline) {
+                state.splineToPos = { x: e.clientX, y: e.clientY };
+                return;
+            }
+
+            // Handle node resizing
+            if (state.resizingNode !== null) {
+                const world = screenToWorld(e.clientX, e.clientY);
+                const node = state.nodes.find(n => n.id === state.resizingNode);
+                if (node && state.resizeInitialBounds && state.resizeStart) {
+                    const dx = world.x - state.resizeStart.x;
+                    const dy = world.y - state.resizeStart.y;
+                    
+                    const minWidth = 120;
+                    const minHeight = 80;
+                    
+                    let newLeft = state.resizeInitialBounds.left;
+                    let newRight = state.resizeInitialBounds.right;
+                    let newTop = state.resizeInitialBounds.top;
+                    let newBottom = state.resizeInitialBounds.bottom;
+                    
+                    // Adjust bounds based on which corner is being dragged
+                    switch (state.resizeCorner) {
+                        case 'se': // Bottom-right corner
+                            newRight = state.resizeInitialBounds.right + dx;
+                            newBottom = state.resizeInitialBounds.bottom + dy;
+                            break;
+                        case 'sw': // Bottom-left corner
+                            newLeft = state.resizeInitialBounds.left + dx;
+                            newBottom = state.resizeInitialBounds.bottom + dy;
+                            break;
+                        case 'ne': // Top-right corner
+                            newRight = state.resizeInitialBounds.right + dx;
+                            newTop = state.resizeInitialBounds.top + dy;
+                            break;
+                        case 'nw': // Top-left corner
+                            newLeft = state.resizeInitialBounds.left + dx;
+                            newTop = state.resizeInitialBounds.top + dy;
+                            break;
+                    }
+                    
+                    // Calculate new width and height
+                    let newWidth = newRight - newLeft;
+                    let newHeight = newBottom - newTop;
+                    
+                    // Enforce minimum size
+                    if (newWidth < minWidth) {
+                        if (state.resizeCorner.includes('w')) {
+                            newLeft = newRight - minWidth;
+                        } else {
+                            newRight = newLeft + minWidth;
+                        }
+                        newWidth = minWidth;
+                    }
+                    
+                    if (newHeight < minHeight) {
+                        if (state.resizeCorner.includes('n')) {
+                            newTop = newBottom - minHeight;
+                        } else {
+                            newBottom = newTop + minHeight;
+                        }
+                        newHeight = minHeight;
+                    }
+                    
+                    // Update node
+                    node.width = newWidth;
+                    node.height = newHeight;
+                    node.x = (newLeft + newRight) / 2;
+                    node.y = (newTop + newBottom) / 2;
+                }
+                return;
+            }
+
+            // Handle camera panning
+            if (state.isPanning) {
+                const currentTime = performance.now();
+                const deltaTime = Math.max((currentTime - panLastPos.time) / 1000, 0.001);
+                
+                const dx = e.clientX - panLastPos.x;
+                const dy = e.clientY - panLastPos.y;
+                
+                const smoothing = 0.3;
+                state.camera.vx = state.camera.vx * (1 - smoothing) + (dx / deltaTime) * smoothing;
+                state.camera.vy = state.camera.vy * (1 - smoothing) + (dy / deltaTime) * smoothing;
+                
+                state.camera.x = e.clientX - state.panStart.x;
+                state.camera.y = e.clientY - state.panStart.y;
+                
+                panLastPos = { x: e.clientX, y: e.clientY, time: currentTime };
+                return;
+            }
+            
+            // Handle node dragging - simplified to follow mouse directly
+            if (state.draggingNode !== null) {
+                const world = screenToWorld(e.clientX, e.clientY);
+                const node = state.nodes.find(n => n.id === state.draggingNode);
+                if (node && state.dragOffset) {
+                    // Direct position update - no velocity during drag
+                    const newX = world.x - state.dragOffset.x;
+                    const newY = world.y - state.dragOffset.y;
+                    
+                    // Calculate velocity for when we release
+                    const dt = 0.016; // Assume 60fps
+                    node.vx = (newX - node.x) / dt;
+                    node.vy = (newY - node.y) / dt;
+                    
+                    node.x = newX;
+                    node.y = newY;
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            // Handle spline dragging completion
+            if (state.draggingSpline) {
+                const anchor = getAnchorAt(e.clientX, e.clientY);
+                
+                if (anchor && anchor.node.id !== state.splineFromNode) {
+                    // Create new connection to different node
+                    state.connections.push({
+                        id: state.nextConnId++,
+                        from: state.splineFromNode,
+                        to: anchor.node.id,
+                        fromAnchor: state.splineFromAnchor,
+                        toAnchor: anchor.anchor
+                    });
+                }
+                // If released in empty space or on same node, just cancel
+                
+                // Reset spline state
+                state.draggingSpline = false;
+                state.splineFromNode = null;
+                state.splineFromAnchor = null;
+                state.splineToPos = null;
+                return;
+            }
+
+            state.isPanning = false;
+            state.resizingNode = null;
+            state.resizeCorner = null;
+            state.resizeStart = null;
+            state.resizeInitialBounds = null;
+            
+            // Apply inertia cap to dragged node
+            if (state.draggingNode !== null) {
+                const node = state.nodes.find(n => n.id === state.draggingNode);
+                if (node) {
+                    const maxVelocity = 500;
+                    const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+                    if (speed > maxVelocity) {
+                        const scale = maxVelocity / speed;
+                        node.vx *= scale;
+                        node.vy *= scale;
+                    }
+                }
+            }
+            
+            // Cap camera velocity
+            const maxCameraVel = 1000;
+            const cameraSpeed = Math.sqrt(state.camera.vx * state.camera.vx + state.camera.vy * state.camera.vy);
+            if (cameraSpeed > maxCameraVel) {
+                const scale = maxCameraVel / cameraSpeed;
+                state.camera.vx *= scale;
+                state.camera.vy *= scale;
+            }
+            
+            state.draggingNode = null;
+            state.dragOffset = null;
+            panLastPos = null;
+            canvas.classList.remove('cursor-panning');
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const oldZoom = state.camera.zoom;
+            state.camera.zoom = Math.min(Math.max(state.camera.zoom * delta, 0.1), 5);
+            
+            const factor = state.camera.zoom / oldZoom - 1;
+            state.camera.x -= (e.clientX - state.camera.x) * factor;
+            state.camera.y -= (e.clientY - state.camera.y) * factor;
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Delete') {
+                // Delete selected node
+                if (state.selectedNode) {
+                    state.nodes = state.nodes.filter(n => n.id !== state.selectedNode);
+                    state.connections = state.connections.filter(c => 
+                        c.from !== state.selectedNode && c.to !== state.selectedNode
+                    );
+                    state.selectedNode = null;
+                }
+                // Delete selected connection
+                else if (state.selectedConnection) {
+                    state.connections = state.connections.filter(c => c.id !== state.selectedConnection);
+                    state.selectedConnection = null;
+                }
+            }
+        });
+
+        // Node editor
+        const nodeEditInput = document.getElementById('nodeEditInput');
+        
+        function showNodeEditor(node, mode = 'title') {
+            const screen = worldToScreen(node.x, node.y);
+            const lines = node.label.split('\n');
+            const nodeWidth = node.width * state.camera.zoom;
+            const nodeHeight = node.height * state.camera.zoom;
+            const titleBarHeight = state.TITLE_BAR_HEIGHT * state.camera.zoom;
+            
+            if (mode === 'title') {
+                // Edit only the first line (title)
+                nodeEditInput.style.left = (screen.x - nodeWidth/2 + 10) + 'px';
+                nodeEditInput.style.top = (screen.y - nodeHeight/2 + 5) + 'px';
+                nodeEditInput.style.width = (nodeWidth - 20) + 'px';
+                nodeEditInput.rows = 1;
+                nodeEditInput.value = lines[0] || '';
+            } else {
+                // Edit body (all lines except first)
+                const bodyHeight = nodeHeight - titleBarHeight - 20;
+                nodeEditInput.style.left = (screen.x - nodeWidth/2 + 10) + 'px';
+                nodeEditInput.style.top = (screen.y - nodeHeight/2 + titleBarHeight + 10) + 'px';
+                nodeEditInput.style.width = (nodeWidth - 20) + 'px';
+                nodeEditInput.style.height = bodyHeight + 'px';
+                nodeEditInput.rows = Math.max(3, Math.floor(bodyHeight / 20));
+                nodeEditInput.value = lines.slice(1).join('\n');
+            }
+            
+            nodeEditInput.style.display = 'block';
+            nodeEditInput.focus();
+            nodeEditInput.select();
+            
+            nodeEditInput.dataset.nodeId = node.id;
+            nodeEditInput.dataset.editMode = mode;
+        }
+
+        nodeEditInput.addEventListener('blur', () => {
+            const nodeId = parseInt(nodeEditInput.dataset.nodeId);
+            const mode = nodeEditInput.dataset.editMode;
+            const node = state.nodes.find(n => n.id === nodeId);
+            
+            if (node && nodeEditInput.value.trim()) {
+                const lines = node.label.split('\n');
+                
+                if (mode === 'title') {
+                    // Update only title (first line)
+                    lines[0] = nodeEditInput.value.trim();
+                    node.label = lines.join('\n');
+                } else {
+                    // Update body (keep first line, replace rest)
+                    const title = lines[0] || 'Node';
+                    const body = nodeEditInput.value.trim();
+                    node.label = body ? `${title}\n${body}` : title;
+                }
+            }
+            nodeEditInput.style.display = 'none';
+        });
+
+        nodeEditInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                nodeEditInput.blur();
+            } else if (e.key === 'Escape') {
+                nodeEditInput.style.display = 'none';
+            }
+        });
+
+        // Toolbar
+        const buttons = {
+            select: document.getElementById('btnSelect'),
+            pan: document.getElementById('btnPan')
+        };
+
+        function setMode(mode) {
+            state.mode = mode;
+            
+            Object.values(buttons).forEach(btn => btn.classList.remove('active'));
+            buttons[mode].classList.add('active');
+        }
+
+        buttons.select.addEventListener('click', () => setMode('select'));
+        buttons.pan.addEventListener('click', () => setMode('pan'));
+
+        document.getElementById('btnZoomIn').addEventListener('click', () => {
+            state.camera.zoom = Math.min(state.camera.zoom * 1.2, 5);
+        });
+
+        document.getElementById('btnZoomOut').addEventListener('click', () => {
+            state.camera.zoom = Math.max(state.camera.zoom * 0.8, 0.1);
+        });
+
+        document.getElementById('btnExport').addEventListener('click', () => {
+            const data = {
+                nodes: state.nodes.map(n => ({
+                    id: n.id, x: n.x, y: n.y, label: n.label, 
+                    color: n.color, width: n.width, height: n.height
+                })),
+                connections: state.connections,
+                version: '2.0'
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `event-mapper-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        document.getElementById('btnImport').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    state.nodes = (data.nodes || []).map(node => ({
+                        ...node,
+                        vx: 0,
+                        vy: 0,
+                        width: node.width || 200,
+                        height: node.height || 120
+                    }));
+                    state.connections = data.connections || [];
+                    state.nextNodeId = Math.max(...state.nodes.map(n => n.id), 0) + 1;
+                    state.nextConnId = Math.max(...state.connections.map(c => c.id), 0) + 1;
+                    state.selectedNode = null;
+                } catch (err) {
+                    alert('Erreur lors du chargement du fichier JSON');
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        });
+
+        document.getElementById('btnClear').addEventListener('click', () => {
+            if (confirm('Voulez-vous vraiment effacer tous les nodes et connexions ?')) {
+                state.nodes = [];
+                state.connections = [];
+                state.nextNodeId = 1;
+                state.nextConnId = 1;
+                state.selectedNode = null;
+            }
+        });
+
+        // Color picker
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const color = btn.dataset.color;
+                if (state.selectedNode) {
+                    const node = state.nodes.find(n => n.id === state.selectedNode);
+                    if (node) {
+                        node.color = color;
+                    }
+                }
+            });
+        });
+
+        // Background color buttons
+        document.getElementById('btnBgDark').addEventListener('click', () => {
+            state.backgroundColor = '#000000';
+        });
+
+        document.getElementById('btnBgGray').addEventListener('click', () => {
+            state.backgroundColor = '#444444';
+        });
+
+        document.getElementById('btnBgWhite').addEventListener('click', () => {
+            state.backgroundColor = '#f0f0f0';
+        });
+
+        // Reverse spline direction button
+        document.getElementById('btnReverseSpline').addEventListener('click', () => {
+            if (state.selectedConnection) {
+                const conn = state.connections.find(c => c.id === state.selectedConnection);
+                if (conn) {
+                    // Swap from and to
+                    const tempFrom = conn.from;
+                    const tempFromAnchor = conn.fromAnchor;
+                    
+                    conn.from = conn.to;
+                    conn.fromAnchor = conn.toAnchor;
+                    conn.to = tempFrom;
+                    conn.toAnchor = tempFromAnchor;
+                }
+            }
+        });
+
+        render();
+    </script>
+</body>
+</html>
